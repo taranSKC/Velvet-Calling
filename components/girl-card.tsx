@@ -83,7 +83,7 @@ export default function GirlCard({
                 fontWeight: 700,
               }}
             >
-              ${pricePerMin}/m
+              {(pricePerMin * 10).toFixed(0)} Credits/m
             </span>
           </div>
 

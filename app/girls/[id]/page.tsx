@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   useGetGirl,
   useGetGirlPhotos,
@@ -19,7 +20,9 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Video, MessageSquare, Heart, Lock, Star, Send, ChevronRight, ArrowLeft } from "lucide-react";
+import { useVoiceAgent } from "@/hooks/use-voice-agent";
+import VoiceCallOverlay from "@/components/voice-call-overlay";
+import { Video, MessageSquare, Heart, Lock, Star, Send, ChevronRight, ArrowLeft, X, Phone } from "lucide-react";
 import Link from "next/link";
 
 const TIP_AMOUNTS = [5, 10, 25, 50];
@@ -28,17 +31,34 @@ const serif: React.CSSProperties = { fontFamily: "'Cormorant Garamond', serif" }
 const sans: React.CSSProperties = { fontFamily: "'Raleway', sans-serif" };
 const label: React.CSSProperties = { fontFamily: "'Raleway', sans-serif", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontSize: "0.62rem" };
 
+// Voice-to-girl mapping — each girl gets a unique xAI voice persona
+const VOICE_MAP: Record<string, string> = {
+  "Ava Sinclair": "Ara",
+  "Chloe Hart": "Eve",
+  "Emma Thorne": "Sal",
+  "Yuki Sakura": "Eve",
+  "Naomi Brooks": "Ara",
+};
+const DEFAULT_VOICE = "Eve";
+
 export default function GirlProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const girlId = parseInt((params?.id as string) ?? "0", 10);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: session } = useSession();
 
   const [activeTab, setActiveTab] = useState<"photos" | "videos">("photos");
   const [chatInput, setChatInput] = useState("");
-  const [callActive, setCallActive] = useState(false);
   const [floatingHearts, setFloatingHearts] = useState<number[]>([]);
+  const [playingVideo, setPlayingVideo] = useState<any>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const billingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+
+  // xAI Voice Agent
+  const voiceAgent = useVoiceAgent();
 
   const { data: girl, isLoading: loadingGirl } = useGetGirl(girlId, {
     query: { enabled: !!girlId, queryKey: getGetGirlQueryKey(girlId) },
@@ -67,6 +87,7 @@ export default function GirlProfilePage() {
   }, [messages]);
 
   const handleSendMessage = () => {
+    if (!session?.user) return;
     if (!chatInput.trim()) return;
     const content = chatInput;
     setChatInput("");
@@ -89,7 +110,7 @@ export default function GirlProfilePage() {
           const id = Date.now();
           setFloatingHearts((prev) => [...prev, id]);
           setTimeout(() => setFloatingHearts((prev) => prev.filter((h) => h !== id)), 1000);
-          toast({ title: `$${amount} tip sent!`, description: `${girl?.name} loved it 💋` });
+          toast({ title: `${(amount * 10).toFixed(0)} Credits tip sent!`, description: `${girl?.name} loved it 💋` });
         },
       }
     );
@@ -98,6 +119,257 @@ export default function GirlProfilePage() {
   const handleFavorite = () => {
     if (isFavorite) removeFav.mutate({ girlId });
     else addFav.mutate({ data: { girlId } });
+  };
+
+  // Derive callActive from voice agent status
+  const callActive = voiceAgent.status === "active" || voiceAgent.status === "connecting";
+
+  // Track wallet balance during call
+  const currentBalance = liveBalance ?? wallet?.balance ?? 0;
+
+  const handleStartCall = useCallback(async () => {
+    if (!session?.user) {
+      toast({
+        title: "🔒 Authentication Required",
+        description: "Please sign in to start a live voice call.",
+        variant: "destructive"
+      });
+      router.push(`/login?callbackUrl=/girls/${girlId}`);
+      return;
+    }
+
+    if (!girl) return;
+
+    if (!wallet || wallet.balance < girl.pricePerMin) {
+      toast({
+        title: "Insufficient balance",
+        description: `You need at least ${(girl.pricePerMin * 10).toFixed(0)} Credits in your wallet to start this call.`,
+        variant: "destructive"
+      });
+      router.push("/wallet");
+      return;
+    }
+
+    const voice = VOICE_MAP[girl.name] || DEFAULT_VOICE;
+    setLiveBalance(wallet.balance);
+
+    await voiceAgent.connect({
+      voice,
+      instructions: girl.bio,
+      girlName: girl.name,
+    });
+  }, [session, girl, wallet, voiceAgent, toast, router, girlId]);
+
+  // ─── Refs for stable billing logic (prevents effect re-triggers) ───
+  const voiceAgentRef = useRef(voiceAgent);
+  voiceAgentRef.current = voiceAgent;
+  const queryClientRef = useRef(queryClient);
+  queryClientRef.current = queryClient;
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+  const girlRef = useRef(girl);
+  girlRef.current = girl;
+
+  // Billing guards
+  const isBillingActiveRef = useRef(false);
+  const isDeductingRef = useRef(false); // prevents overlapping API calls
+
+  const handleEndCall = useCallback(() => {
+    // Stop billing FIRST
+    isBillingActiveRef.current = false;
+    if (billingIntervalRef.current) {
+      clearInterval(billingIntervalRef.current);
+      billingIntervalRef.current = null;
+    }
+    // Then disconnect
+    voiceAgentRef.current.disconnect();
+    setLiveBalance(null);
+    // Refresh wallet balance
+    queryClientRef.current.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+  }, []); // stable — no deps, uses refs
+
+  // Per-minute billing during active calls — BULLETPROOF
+  useEffect(() => {
+    // Only run when status is "active" and girl data exists
+    if (voiceAgent.status !== "active" || !girl) {
+      // If we were billing, stop
+      if (isBillingActiveRef.current) {
+        isBillingActiveRef.current = false;
+        if (billingIntervalRef.current) {
+          clearInterval(billingIntervalRef.current);
+          billingIntervalRef.current = null;
+        }
+      }
+      return;
+    }
+
+    // Guard: prevent duplicate billing setups
+    if (isBillingActiveRef.current) {
+      return;
+    }
+    isBillingActiveRef.current = true;
+
+    // Capture girl data for this billing session
+    const billingGirlId = girl.id;
+    const billingGirlName = girl.name;
+    const billingPricePerMin = girl.pricePerMin;
+
+    const deductMinute = async () => {
+      // Guard: prevent overlapping deduction calls
+      if (isDeductingRef.current) return;
+      // Guard: billing may have been stopped while we were waiting
+      if (!isBillingActiveRef.current) return;
+
+      isDeductingRef.current = true;
+      try {
+        const res = await fetch("/api/voice/deduct", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            girlId: billingGirlId,
+            girlName: billingGirlName,
+            pricePerMin: billingPricePerMin,
+          }),
+        });
+        const data = await res.json();
+
+        // Check if billing was stopped while the request was in-flight
+        if (!isBillingActiveRef.current) return;
+
+        if (data.error === "insufficient_balance") {
+          toastRef.current({
+            title: "Call Ended",
+            description: "Insufficient balance. Please top up your wallet.",
+            variant: "destructive",
+          });
+          handleEndCall();
+          return;
+        }
+
+        // Server rate-limited us — just wait for next interval
+        if (data.error === "rate_limited") {
+          return;
+        }
+
+        if (data.success) {
+          setLiveBalance(data.newBalance);
+        }
+      } catch (err) {
+        console.error("Billing error:", err);
+      } finally {
+        isDeductingRef.current = false;
+      }
+    };
+
+    // Deduct first minute immediately
+    deductMinute();
+    // Then every 60 seconds
+    billingIntervalRef.current = setInterval(deductMinute, 60_000);
+
+    return () => {
+      isBillingActiveRef.current = false;
+      if (billingIntervalRef.current) {
+        clearInterval(billingIntervalRef.current);
+        billingIntervalRef.current = null;
+      }
+    };
+    // ONLY re-run when status transitions to "active" or girl changes
+    // handleEndCall is stable (no deps), so this won't loop
+  }, [voiceAgent.status, girl?.id, handleEndCall]);
+
+  // Handle voice agent errors
+  useEffect(() => {
+    if (voiceAgent.error && voiceAgent.status === "error") {
+      toastRef.current({
+        title: "Voice Call Error",
+        description: voiceAgent.error,
+        variant: "destructive",
+      });
+    }
+  }, [voiceAgent.error, voiceAgent.status]);
+
+  const handleWatchVideo = (video: any) => {
+    if (!session?.user) {
+      toast({
+        title: "🔒 Authentication Required",
+        description: "Please sign in to watch exclusive performer videos.",
+        variant: "destructive"
+      });
+      router.push(`/login?callbackUrl=/girls/${girlId}`);
+      return;
+    }
+
+    if (video.isPremium) {
+      const confirmUnlock = window.confirm(`Unlock premium video "${video.title}" for ${(video.price * 10).toFixed(0)} Credits?`);
+      if (!confirmUnlock) return;
+
+      if (!wallet || wallet.balance < video.price) {
+        toast({
+          title: "Insufficient balance",
+          description: "Please top up your wallet to unlock this video.",
+          variant: "destructive"
+        });
+        router.push("/wallet");
+        return;
+      }
+
+      sendTip.mutate(
+        { data: { girlId, amount: video.price, message: `Unlocked video: ${video.title}` } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+            toast({
+              title: "Video Unlocked! 🎉",
+              description: `Successfully unlocked "${video.title}"`
+            });
+            setPlayingVideo(video);
+          }
+        }
+      );
+    } else {
+      setPlayingVideo(video);
+    }
+  };
+
+  const handleViewPhoto = (photo: any) => {
+    if (!session?.user) {
+      toast({
+        title: "🔒 Authentication Required",
+        description: "Please sign in to view exclusive performer photos.",
+        variant: "destructive"
+      });
+      router.push(`/login?callbackUrl=/girls/${girlId}`);
+      return;
+    }
+
+    if (photo.isPremium) {
+      const confirmUnlock = window.confirm(`Unlock premium photo for ${(photo.price * 10).toFixed(0)} Credits?`);
+      if (!confirmUnlock) return;
+
+      if (!wallet || wallet.balance < photo.price) {
+        toast({
+          title: "Insufficient balance",
+          description: "Please top up your wallet to unlock this photo.",
+          variant: "destructive"
+        });
+        router.push("/wallet");
+        return;
+      }
+
+      sendTip.mutate(
+        { data: { girlId, amount: photo.price, message: `Unlocked premium photo` } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+            toast({
+              title: "Photo Unlocked! 🎉",
+              description: "You can now view this premium photo."
+            });
+            photo.isPremium = false; // local state override
+          }
+        }
+      );
+    }
   };
 
   if (loadingGirl) {
@@ -166,7 +438,7 @@ export default function GirlProfilePage() {
                 </div>
                 {girl.isOnline && (
                   <button
-                    onClick={() => setCallActive(true)}
+                    onClick={handleStartCall}
                     data-testid="button-start-call"
                     className="velvet-glow flex items-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3 rounded-full font-bold text-white active:scale-95 transition-transform cursor-pointer"
                     style={{
@@ -174,14 +446,14 @@ export default function GirlProfilePage() {
                       ...label, fontSize: "0.68rem",
                     }}
                   >
-                    <Video size={14} />
-                    Start Video Call · ${girl.pricePerMin}/min
+                    <Phone size={14} />
+                    Start Voice Call · {(girl.pricePerMin * 10).toFixed(0)} Credits/min
                   </button>
                 )}
               </div>
             )}
 
-            {/* Live state */}
+            {/* Live state indicator (when call active but overlay shows full UI) */}
             {callActive && (
               <div className="absolute top-3 right-3 flex items-center gap-2">
                 <span
@@ -189,10 +461,10 @@ export default function GirlProfilePage() {
                   style={{ background: "rgba(34,197,94,0.18)", border: "1px solid rgba(34,197,94,0.4)", color: "#22c55e", ...label, fontSize: "0.6rem" }}
                 >
                   <span className="online-dot w-1.5 h-1.5 rounded-full" style={{ background: "#22c55e" }} />
-                  Live · ${girl.pricePerMin}/min
+                  Live · {(girl.pricePerMin * 10).toFixed(0)} Credits/min
                 </span>
                 <button
-                  onClick={() => setCallActive(false)}
+                  onClick={handleEndCall}
                   className="px-2.5 py-1 rounded-full active:scale-95 transition-transform cursor-pointer"
                   style={{ background: "rgba(196,30,58,0.28)", border: "1px solid rgba(196,30,58,0.45)", color: "hsl(0 72% 68%)", ...label, fontSize: "0.6rem" }}
                 >
@@ -308,16 +580,27 @@ export default function GirlProfilePage() {
 
             {/* Chat input */}
             <div className="p-2.5 flex items-center gap-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-              <input
-                type="text"
-                placeholder={`Message ${girl.name}…`}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                data-testid="input-chat-message"
-                className="flex-1 bg-transparent outline-none text-sm px-3 py-2 rounded-xl min-w-0"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "hsl(30 15% 88%)", ...sans }}
-              />
+              {!session?.user ? (
+                <div 
+                  onClick={() => router.push(`/login?callbackUrl=/girls/${girlId}`)}
+                  className="flex-1 bg-[#1a1224]/80 border border-fuchsia-900/30 text-purple-300/60 rounded-xl px-3 py-2 text-sm text-center font-medium cursor-pointer hover:border-fuchsia-800/60 hover:text-purple-200 transition-all flex items-center justify-center gap-1.5 select-none"
+                  style={sans}
+                >
+                  <Lock size={12} className="text-fuchsia-400" />
+                  Please sign in to chat with {girl.name}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  placeholder={`Message ${girl.name}…`}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                  data-testid="input-chat-message"
+                  className="flex-1 bg-transparent outline-none text-sm px-3 py-2 rounded-xl min-w-0"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "hsl(30 15% 88%)", ...sans }}
+                />
+              )}
               <button
                 onClick={handleSendMessage}
                 disabled={!chatInput.trim() || sendMessage.isPending}
@@ -331,7 +614,7 @@ export default function GirlProfilePage() {
 
             {/* Tip bar */}
             <div className="px-2.5 pb-2.5 flex items-center gap-2 flex-wrap" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-              <span className="text-xs" style={{ color: "hsl(30 5% 45%)", ...label }}>Send Tip:</span>
+              <span className="text-xs" style={{ color: "hsl(30 5% 45%)", ...label }}>Send Credits:</span>
               {TIP_AMOUNTS.map((amt) => (
                 <button
                   key={amt}
@@ -341,7 +624,7 @@ export default function GirlProfilePage() {
                   className="px-3 py-1.5 rounded-lg font-bold transition-all active:scale-90 hover:scale-105 cursor-pointer"
                   style={{ background: "rgba(212,168,67,0.12)", border: "1px solid rgba(212,168,67,0.28)", color: "hsl(43 74% 68%)", ...label }}
                 >
-                  ${amt}
+                  {(amt * 10)} Credits
                 </button>
               ))}
             </div>
@@ -411,6 +694,7 @@ export default function GirlProfilePage() {
                   {photos?.slice(0, 6).map((photo) => (
                     <div
                       key={photo.id}
+                      onClick={() => handleViewPhoto(photo)}
                       className="relative rounded-lg overflow-hidden cursor-pointer group"
                       style={{ aspectRatio: "1" }}
                       data-testid={`photo-${photo.id}`}
@@ -424,7 +708,7 @@ export default function GirlProfilePage() {
                       {photo.isPremium && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
                           <Lock size={13} style={{ color: "hsl(43 74% 68%)" }} />
-                          <span className="text-xs font-bold mt-0.5" style={{ color: "hsl(43 74% 68%)", ...sans }}>${photo.price}</span>
+                          <span className="text-xs font-bold mt-0.5" style={{ color: "hsl(43 74% 68%)", ...sans }}>{((photo.price ?? 0) * 10).toFixed(0)} Credits</span>
                         </div>
                       )}
                     </div>
@@ -437,6 +721,7 @@ export default function GirlProfilePage() {
                   {videos?.slice(0, 4).map((video) => (
                     <div
                       key={video.id}
+                      onClick={() => handleWatchVideo(video)}
                       className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-all duration-200 active:scale-98"
                       style={{ background: "rgba(255,255,255,0.03)" }}
                       data-testid={`video-${video.id}`}
@@ -458,7 +743,7 @@ export default function GirlProfilePage() {
                         <p className="text-xs font-medium truncate" style={{ color: "hsl(30 15% 82%)", ...sans }}>{video.title}</p>
                         <p className="text-xs" style={{ color: "hsl(30 5% 42%)", ...sans }}>
                           {Math.floor(video.duration / 60)}:{String(video.duration % 60).padStart(2, "0")}
-                          {video.isPremium && <span style={{ color: "hsl(43 74% 62%)" }}> · ${video.price}</span>}
+                          {video.isPremium && <span style={{ color: "hsl(43 74% 62%)" }}> · {((video.price ?? 0) * 10).toFixed(0)} Credits</span>}
                         </p>
                       </div>
                     </div>
@@ -483,6 +768,54 @@ export default function GirlProfilePage() {
           </div>
         </div>
       </div>
+      {/* ── Video Player Modal ── */}
+      {playingVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-4xl bg-[#0d0714] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/5">
+              <h3 className="font-serif italic text-lg text-purple-100">{playingVideo.title}</h3>
+              <button
+                onClick={() => setPlayingVideo(null)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-purple-300 hover:text-white transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {/* Player */}
+            <div className="relative aspect-video bg-black">
+              <video
+                src={playingVideo.videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4"}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Voice Call Overlay ── */}
+      {callActive && girl && (
+        <VoiceCallOverlay
+          girl={{
+            id: girl.id,
+            name: girl.name,
+            age: girl.age,
+            avatarUrl: girl.avatarUrl,
+            pricePerMin: girl.pricePerMin,
+          }}
+          status={voiceAgent.status}
+          messages={voiceAgent.messages}
+          micLevel={voiceAgent.micLevel}
+          error={voiceAgent.error}
+          isMuted={voiceAgent.isMuted}
+          onDisconnect={handleEndCall}
+          onSendText={voiceAgent.sendText}
+          onToggleMute={voiceAgent.toggleMute}
+          walletBalance={currentBalance}
+        />
+      )}
     </div>
   );
 }

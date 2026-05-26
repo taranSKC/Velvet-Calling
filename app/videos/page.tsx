@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useListVideos } from "@workspace/api-client-react";
+import { useListVideos, useGetWallet, useSendTip, getGetWalletQueryKey } from "@workspace/api-client-react";
 import { Lock, Play, Search, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const SORTS = [
   { value: "newest", label: "Newest" },
@@ -16,9 +20,61 @@ const sans: React.CSSProperties = { fontFamily: "'Raleway', sans-serif" };
 const label: React.CSSProperties = { fontFamily: "'Raleway', sans-serif", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontSize: "0.62rem" };
 
 export default function VideosPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: session } = useSession();
+
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
   const [category, setCategory] = useState("All");
+  const [playingVideo, setPlayingVideo] = useState<any>(null);
+
+  const { data: wallet } = useGetWallet();
+  const sendTip = useSendTip();
+
+  const handleWatchVideo = (video: any) => {
+    if (!session?.user) {
+      toast({
+        title: "🔒 Authentication Required",
+        description: "Please sign in to watch exclusive performer videos.",
+        variant: "destructive"
+      });
+      router.push(`/login?callbackUrl=/videos`);
+      return;
+    }
+
+    if (video.isPremium) {
+      const confirmUnlock = window.confirm(`Unlock premium video "${video.title}" for ${(video.price * 10).toFixed(0)} Credits?`);
+      if (!confirmUnlock) return;
+
+      if (!wallet || wallet.balance < video.price) {
+        toast({
+          title: "Insufficient balance",
+          description: "Please top up your wallet to unlock this video.",
+          variant: "destructive"
+        });
+        router.push("/wallet");
+        return;
+      }
+
+      sendTip.mutate(
+        { data: { girlId: video.girlId, amount: video.price, message: `Unlocked video: ${video.title}` } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+            toast({
+              title: "Video Unlocked! 🎉",
+              description: `Successfully unlocked "${video.title}"`
+            });
+            setPlayingVideo(video);
+          }
+        }
+      );
+    } else {
+      setPlayingVideo(video);
+    }
+  };
 
   const params: Record<string, string> = { sort };
   if (search) params.search = search;
@@ -106,6 +162,7 @@ export default function VideosPage() {
           {videos?.map((video) => (
             <div
               key={video.id}
+              onClick={() => handleWatchVideo(video)}
               className="glass-card rounded-xl overflow-hidden cursor-pointer group"
               data-testid={`card-video-${video.id}`}
             >
@@ -125,7 +182,7 @@ export default function VideosPage() {
                 {video.isPremium ? (
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <Lock size={18} style={{ color: "hsl(43 74% 68%)" }} />
-                    <span className="text-xs font-bold mt-1" style={{ color: "hsl(43 74% 68%)", ...sans }}>${video.price}</span>
+                    <span className="text-xs font-bold mt-1" style={{ color: "hsl(43 74% 68%)", ...sans }}>{((video.price ?? 0) * 10).toFixed(0)} Credits</span>
                   </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -144,6 +201,32 @@ export default function VideosPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {/* ── Video Player Modal ── */}
+      {playingVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="relative w-full max-w-4xl bg-[#0d0714] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/5">
+              <h3 className="font-serif italic text-lg text-purple-100">{playingVideo.title}</h3>
+              <button
+                onClick={() => setPlayingVideo(null)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-purple-300 hover:text-white transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {/* Player */}
+            <div className="relative aspect-video bg-black">
+              <video
+                src={playingVideo.videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4"}
+                controls
+                autoPlay
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

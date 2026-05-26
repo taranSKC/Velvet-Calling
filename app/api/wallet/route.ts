@@ -10,7 +10,7 @@ function serializeTx(tx: { id: number; type: string; amount: number; description
 export async function getOrCreateWallet() {
   let [wallet] = await db.select().from(walletTable).limit(1);
   if (!wallet) {
-    [wallet] = await db.insert(walletTable).values({ balance: 50, currency: "USD" }).returning();
+    [wallet] = await db.insert(walletTable).values({ balance: 0, currency: "USD" }).returning();
   }
   return wallet;
 }

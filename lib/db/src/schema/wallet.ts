@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 
 export const walletTable = pgTable("wallet", {
   id: serial("id").primaryKey(),
-  balance: real("balance").notNull().default(50),
+  balance: real("balance").notNull().default(0),
   currency: text("currency").notNull().default("USD"),
   updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
 });
@@ -14,6 +14,7 @@ export const transactionsTable = pgTable("transactions", {
   type: text("type").notNull(), // topup | tip | call | purchase
   amount: real("amount").notNull(),
   description: text("description").notNull(),
+  stripeSessionId: text("stripe_session_id").unique(),
   createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
 });
 

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     // Hash the password securely using bcryptjs
     const passwordHash = bcrypt.hashSync(passwordStr, 10);
 
-    // Insert user into D1 SQLite database
+    // Insert user into database
     const userId = crypto.randomUUID();
     await db.insert(usersTable).values({
       id: userId,

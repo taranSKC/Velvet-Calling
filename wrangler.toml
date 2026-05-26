@@ -3,11 +3,6 @@ main = ".open-next/worker.js"
 compatibility_date = "2026-05-26"
 compatibility_flags = ["nodejs_compat"]
 
-[[d1_databases]]
-binding = "DB"
-database_name = "velvet-call"
-database_id = "10608447-057d-408e-8115-0b80ff0074b4"
-
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"

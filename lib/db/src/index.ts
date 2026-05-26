@@ -7,9 +7,11 @@ let dbInstance: any;
 function getDb() {
   if (dbInstance) return dbInstance;
 
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable is not defined. Please configure it in your environment or Cloudflare secrets.");
+    // During Next.js build time or when DATABASE_URL is not set locally, fall back to a dummy string.
+    // postgres-js connects lazily, so this will not trigger any actual network calls during build.
+    connectionString = "postgres://postgres:postgres@localhost:5432/postgres";
   }
 
   // prepare: false is required when connecting to Supabase via connection poolers (like Supavisor/PgBouncer)

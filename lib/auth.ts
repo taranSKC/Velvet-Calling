@@ -24,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(credentials.email).toLowerCase().trim();
         const password = String(credentials.password);
 
-        // Fetch user from D1 database
+        // Fetch user from database
         const rows = await db
           .select()
           .from(usersTable)

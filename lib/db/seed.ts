@@ -5,7 +5,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from .env.local
+// Load environment variables from the root directory
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config({ path: path.resolve(__dirname, "../../.env.local") });
 
 async function main() {
@@ -305,19 +306,11 @@ async function main() {
   console.log("💰 Seeding wallet...");
   const initialWallet = {
     id: 1,
-    balance: 100.0,
+    balance: 0.0,
     currency: "USD",
   };
 
   await db.insert(walletTable).values(initialWallet);
-
-  // Seed transaction separately
-  await db.insert(transactionsTable).values({
-    id: 1,
-    type: "topup",
-    amount: 100.0,
-    description: "Welcome Promo Topup",
-  });
 
   // 7. Seed initial welcome messages
   console.log("💬 Seeding chat messages...");
@@ -339,7 +332,7 @@ async function main() {
     {
       id: 3,
       girlId: 4,
-      content: "Konichiwa! 🌸 Welcome to my fantasy room. I'm Yuki, and I absolute love visual teasing. Let me know if you want to start a private video call or send a sweet tip! Click chat to talk.",
+      content: "Konichiwa! 🌸 Welcome to my fantasy room. I'm Yuki, and I absolute love visual teasing. Let me know if you want to start a private voice call or send a sweet tip! Click chat to talk.",
       sender: "girl",
       createdAt: new Date(Date.now() - 3600000).toISOString(),
     },

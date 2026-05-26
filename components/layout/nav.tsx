@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useGetWallet } from "@workspace/api-client-react";
 import { Wallet, Heart, Video, Image, Users, Radio } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 
 export default function Nav() {
   const pathname = usePathname();
   const { data: wallet } = useGetWallet();
+  const { data: session } = useSession();
 
   const navLinks = [
     { href: "/girls", label: "Girls", icon: Users },
@@ -77,20 +79,22 @@ export default function Nav() {
 
           {/* Right: Wallet + CTA */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <Link href="/wallet" data-testid="link-nav-wallet" className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-200"
-              style={{
-                background: "rgba(212,168,67,0.1)",
-                border: "1px solid rgba(212,168,67,0.22)",
-              }}
-            >
-              <Wallet size={12} style={{ color: "hsl(43 74% 58%)" }} />
-              <span
-                className="text-sm font-semibold"
-                style={{ fontFamily: "'Raleway', sans-serif", color: "hsl(43 74% 68%)", letterSpacing: "0.02em" }}
+            {session?.user && (
+              <Link href="/wallet" data-testid="link-nav-wallet" className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-200"
+                style={{
+                  background: "rgba(212,168,67,0.1)",
+                  border: "1px solid rgba(212,168,67,0.22)",
+                }}
               >
-                ${wallet?.balance?.toFixed(2) ?? "0.00"}
-              </span>
-            </Link>
+                <Wallet size={12} style={{ color: "hsl(43 74% 58%)" }} />
+                <span
+                  className="text-sm font-semibold"
+                  style={{ fontFamily: "'Raleway', sans-serif", color: "hsl(43 74% 68%)", letterSpacing: "0.02em" }}
+                >
+                  {wallet?.balance !== undefined ? (wallet.balance * 10).toFixed(0) : "0"} Credits
+                </span>
+              </Link>
+            )}
 
             <Link href="/girls" data-testid="link-nav-browse" className="hidden sm:inline-flex items-center px-4 py-2 rounded-lg text-xs font-bold text-white cursor-pointer transition-all duration-200 active:scale-95"
               style={{
@@ -102,6 +106,35 @@ export default function Nav() {
             >
               Browse
             </Link>
+
+            {session?.user ? (
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-fuchsia-200 border border-fuchsia-800/35 select-none"
+                  style={{
+                    background: "radial-gradient(circle at center, hsl(300 70% 12%), hsl(280 60% 6%))",
+                    boxShadow: "0 0 10px rgba(240,70,250,0.12)",
+                    fontFamily: "'Raleway', sans-serif"
+                  }}
+                  title={session.user.name || "Dreamer"}
+                >
+                  {(session.user.name || "Dreamer").trim().charAt(0).toUpperCase()}
+                </div>
+                <button
+                  onClick={() => signOut()}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-purple-200/70 hover:text-white cursor-pointer active:scale-95 transition-all"
+                  style={{ fontFamily: "'Raleway', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link href="/login" data-testid="link-nav-login" className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-xs font-bold border border-fuchsia-800/40 text-fuchsia-200 hover:text-white cursor-pointer active:scale-95 transition-all bg-fuchsia-950/20"
+                style={{ fontFamily: "'Raleway', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em" }}
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       </nav>

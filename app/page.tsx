@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useGetTrendingGirls, useListCategories, useGetSiteStats } from "@workspace/api-client-react";
 import GirlCard from "@/components/girl-card";
-import { ChevronRight, Users, Video, Image, Radio } from "lucide-react";
+import { ChevronRight, Users, Video, Image, Radio, Phone } from "lucide-react";
 
 export default function HomePage() {
   const { data: trendingGirls, isLoading: loadingGirls } = useGetTrendingGirls();
@@ -117,7 +117,7 @@ export default function HomePage() {
           }}
         >
           Hundreds of gorgeous performers waiting to connect with you.
-          Live video calls, intimate chat, exclusive content — all in one place.
+          Live voice calls, intimate chat, exclusive content — all in one place.
         </p>
 
         {/* CTAs */}
@@ -154,7 +154,7 @@ export default function HomePage() {
               }}
             >
               <Radio size={14} style={{ color: "#22c55e" }} />
-              Watch Live Cams
+              Voice Call Live
             </span>
           </Link>
         </div>
@@ -275,7 +275,7 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {[
-            { icon: Radio, title: "Live Video Calls", desc: "See her face, hear her voice. Real-time intimate video connections." },
+            { icon: Phone, title: "Live Voice Calls", desc: "Hear her voice, share your secrets. Real-time intimate voice connections." },
             { icon: Video, title: "Exclusive Videos", desc: "Unlock her private collection. Premium content she made just for you." },
             { icon: Image, title: "Photo Galleries", desc: "Browse thousands of exclusive photos. Unlock full collections privately." },
             { icon: Users, title: "GFE Mode", desc: "The Girlfriend Experience. The most intimate connection online." },

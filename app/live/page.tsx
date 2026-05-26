@@ -2,7 +2,7 @@
 
 import { useGetOnlineGirls } from "@workspace/api-client-react";
 import GirlCard from "@/components/girl-card";
-import { Radio } from "lucide-react";
+import { Phone } from "lucide-react";
 
 const serif: React.CSSProperties = { fontFamily: "'Cormorant Garamond', serif" };
 const sans: React.CSSProperties = { fontFamily: "'Raleway', sans-serif" };
@@ -27,7 +27,7 @@ export default function LivePage() {
           className="mb-1"
           style={{ ...serif, fontStyle: "italic", fontSize: "clamp(1.8rem, 8vw, 2.8rem)", color: "hsl(30 15% 92%)" }}
         >
-          Live Cams
+          Online Now
         </h1>
         <p style={{ color: "hsl(30 5% 48%)", ...label }}>
           {isLoading ? "Loading…" : `${girls?.length ?? 0} performers live right now`}
@@ -47,9 +47,9 @@ export default function LivePage() {
           className="text-center py-20 rounded-2xl"
           style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
         >
-          <Radio size={36} className="mx-auto mb-4" style={{ color: "hsl(0 72% 50%)" }} />
+          <Phone size={36} className="mx-auto mb-4" style={{ color: "hsl(0 72% 50%)" }} />
           <h2 className="text-2xl font-semibold mb-2" style={{ ...serif, fontStyle: "italic", color: "hsl(30 15% 76%)" }}>
-            No one live right now
+            No one online right now
           </h2>
           <p style={{ color: "hsl(30 5% 42%)", ...sans, fontSize: "0.85rem" }}>Check back soon — they'll be here.</p>
         </div>
