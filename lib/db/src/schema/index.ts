@@ -5,3 +5,4 @@ export * from "./photos";
 export * from "./favorites";
 export * from "./wallet";
 export * from "./chat";
+export * from "./auth";

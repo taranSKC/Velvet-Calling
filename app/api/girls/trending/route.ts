@@ -8,6 +8,6 @@ export async function GET() {
     const rows = await db.select().from(girlsTable).orderBy(sql`${girlsTable.rating} DESC`).limit(10);
     return NextResponse.json(GetTrendingGirlsResponse.parse(rows));
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
   }
 }
