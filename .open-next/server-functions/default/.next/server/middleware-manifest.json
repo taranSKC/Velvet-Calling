@@ -31,7 +31,7 @@
       "wasm": [],
       "assets": [],
       "env": {
-        "__NEXT_BUILD_ID": "Diah5wzl_GEhzzmYKNAHx",
+        "__NEXT_BUILD_ID": "jouijgtKmNq-HLVvWAAWU",
         "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "SgLch4hWNYcON1llNPc7xKQ3JEThAtJQ+AHo+rZtbec=",
         "__NEXT_PREVIEW_MODE_ID": "8264538c1d0379b2f1a34ebffe667e2b",
         "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "73895f9a64ea39848b2b3922a11ff70caebe539564bddd0530cb23f568b9e9be",
@@ -52,12 +52,12 @@
         "server/app/api/auth/[...nextauth]/route_client-reference-manifest.js",
         "server/edge/chunks/_next-internal_server_app_api_auth_[___nextauth]_route_actions_0fm8nbe.js",
         "server/edge/chunks/[root-of-the-server]__0-s8u~v._.js",
-        "server/edge/chunks/_00lffzm._.js",
-        "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_0u6ti4r.js"
+        "server/edge/chunks/_010f6py._.js",
+        "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_09_9~-z.js"
       ],
       "name": "app/api/auth/[...nextauth]/route",
       "page": "/api/auth/[...nextauth]/route",
-      "entrypoint": "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_0u6ti4r.js",
+      "entrypoint": "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_09_9~-z.js",
       "matchers": [
         {
           "regexp": "^/api/auth/(?P<nxtPnextauth>.+?)(?:/)?$",
@@ -67,7 +67,7 @@
       "wasm": [],
       "assets": [],
       "env": {
-        "__NEXT_BUILD_ID": "Diah5wzl_GEhzzmYKNAHx",
+        "__NEXT_BUILD_ID": "jouijgtKmNq-HLVvWAAWU",
         "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "SgLch4hWNYcON1llNPc7xKQ3JEThAtJQ+AHo+rZtbec=",
         "__NEXT_PREVIEW_MODE_ID": "8264538c1d0379b2f1a34ebffe667e2b",
         "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "73895f9a64ea39848b2b3922a11ff70caebe539564bddd0530cb23f568b9e9be",
