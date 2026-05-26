@@ -7,6 +7,17 @@ function getDb() {
   if (dbInstance) return dbInstance;
 
   // 1. Check if Cloudflare D1 database binding is present (Production/Preview on Cloudflare)
+  try {
+    const { getCloudflareContext } = require("@opennextjs/cloudflare");
+    const { env } = getCloudflareContext();
+    if (env && env.DB) {
+      dbInstance = drizzleD1(env.DB, { schema });
+      return dbInstance;
+    }
+  } catch (err) {
+    // getCloudflareContext is not available or failed (e.g. running locally via node, or building)
+  }
+
   if (typeof process !== "undefined" && (process.env as any).DB) {
     dbInstance = drizzleD1((process.env as any).DB, { schema });
     return dbInstance;
