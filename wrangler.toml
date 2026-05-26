@@ -1,4 +1,4 @@
-name = "velvet-call"
+name = "velvel-calling"
 main = ".open-next/worker.js"
 compatibility_date = "2026-05-26"
 compatibility_flags = ["nodejs_compat"]
