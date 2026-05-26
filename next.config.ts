@@ -6,3 +6,6 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+
+// DB Password: lick_me_or_suck_me

@@ -1,14 +1,13 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, serial, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { sql } from "drizzle-orm";
 
-export const chatMessagesTable = sqliteTable("chat_messages", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const chatMessagesTable = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
   girlId: integer("girl_id").notNull(),
   content: text("content").notNull(),
   sender: text("sender").notNull(), // user | girl
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
 });
 
 export const chatTable = chatMessagesTable;

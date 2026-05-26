@@ -1,10 +1,9 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, real, serial, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
-import { sql } from "drizzle-orm";
 
-export const girlsTable = sqliteTable("girls", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const girlsTable = pgTable("girls", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   age: integer("age").notNull(),
   status: text("status").notNull().default("offline"), // online | busy | offline
@@ -13,9 +12,9 @@ export const girlsTable = sqliteTable("girls", {
   coverUrl: text("cover_url"),
   bio: text("bio").notNull().default(""),
   shortBio: text("short_bio").notNull().default(""),
-  specialties: text("specialties", { mode: "json" }).$type<string[]>().notNull(),
-  categories: text("categories", { mode: "json" }).$type<string[]>().notNull(),
-  isOnline: integer("is_online", { mode: "boolean" }).notNull().default(false),
+  specialties: jsonb("specialties").$type<string[]>().notNull(),
+  categories: jsonb("categories").$type<string[]>().notNull(),
+  isOnline: boolean("is_online").notNull().default(false),
   rating: real("rating").notNull().default(4.5),
   totalCalls: integer("total_calls").notNull().default(0),
   ethnicity: text("ethnicity").notNull().default(""),
@@ -24,9 +23,9 @@ export const girlsTable = sqliteTable("girls", {
   availableIn: integer("available_in"),
   photoCount: integer("photo_count").notNull().default(0),
   videoCount: integer("video_count").notNull().default(0),
-  languages: text("languages", { mode: "json" }).$type<string[]>().notNull(),
+  languages: jsonb("languages").$type<string[]>().notNull(),
   joinedYear: integer("joined_year").notNull().default(2023),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
 });
 
 export const insertGirlSchema = createInsertSchema(girlsTable).omit({ id: true, createdAt: true });
