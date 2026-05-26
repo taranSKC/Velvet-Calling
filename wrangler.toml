@@ -1,0 +1,7 @@
+name = "velvet-call"
+compatibility_date = "2026-05-26"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "velvet-call"
+database_id = "10608447-057d-408e-8115-0b80ff0074b4"

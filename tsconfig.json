@@ -19,7 +19,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@workspace/db": ["./lib/db/src"],
+      "@workspace/db/*": ["./lib/db/src/*"],
+      "@workspace/api-zod": ["./lib/api-zod/src"],
+      "@workspace/api-zod/*": ["./lib/api-zod/src/*"],
+      "@workspace/api-client-react": ["./lib/api-client-react/src"],
+      "@workspace/api-client-react/*": ["./lib/api-client-react/src/*"]
     }
   },
   "include": [
