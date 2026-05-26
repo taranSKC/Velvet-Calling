@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:cf": "opennextjs-cloudflare build",
+    "build": "next build && opennextjs-cloudflare build --skipNextBuild",
     "start": "next start",
     "lint": "eslint",
     "db:push": "drizzle-kit push --config ./lib/db/drizzle.config.ts",
