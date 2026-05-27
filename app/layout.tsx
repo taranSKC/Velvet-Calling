@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import ClientLayout from "./client-layout";
+import NextTopLoader from "nextjs-toploader";
 
 export const metadata: Metadata = {
   title: "VelvetCall — Talk to Your Fantasy Girls Live",
@@ -25,7 +26,18 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-full">
+      <body className="min-h-full" suppressHydrationWarning>
+        <NextTopLoader
+          color="hsl(0, 72%, 52%)"
+          initialPosition={0.08}
+          crawlSpeed={200}
+          height={3}
+          crawl={true}
+          showSpinner={false}
+          easing="ease"
+          speed={200}
+          shadow="0 0 10px hsl(0, 72%, 52%), 0 0 5px hsl(0, 72%, 52%)"
+        />
         <Providers>
           <ClientLayout>{children}</ClientLayout>
         </Providers>

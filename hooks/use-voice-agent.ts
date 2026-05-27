@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { encryptPayload, decryptPayload } from "@/utils/crypto";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 export type VoiceStatus = "idle" | "connecting" | "active" | "error";
@@ -13,6 +14,7 @@ export interface VoiceMessage {
 }
 
 export interface VoiceAgentConfig {
+  girlId?: number;
   voice: string;
   instructions: string;
   girlName: string;
@@ -73,11 +75,36 @@ async function fetchSessionToken(): Promise<{
   expiresAt: number;
 }> {
   const response = await fetch("/api/voice/token", { method: "POST" });
+  
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to get voice session token");
+    const isEncrypted = response.headers.get("X-Payload-Encrypted") === "true";
+    const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+    
+    let errText = await response.text();
+    if (isEncrypted && errText.includes(":")) {
+      try {
+        errText = await decryptPayload(errText, secret);
+      } catch {}
+    }
+    
+    let errMsg = "Failed to get voice session token";
+    try {
+      const errJson = JSON.parse(errText);
+      errMsg = errJson.error || errMsg;
+    } catch {}
+    
+    throw new Error(errMsg);
   }
-  const data = await response.json();
+  
+  const isEncrypted = response.headers.get("X-Payload-Encrypted") === "true";
+  let bodyText = await response.text();
+  
+  if (isEncrypted && bodyText.includes(":")) {
+    const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+    bodyText = await decryptPayload(bodyText, secret);
+  }
+  
+  const data = JSON.parse(bodyText);
   return { token: data.token, expiresAt: data.expiresAt };
 }
 
@@ -161,10 +188,22 @@ export function useVoiceAgent(): VoiceAgentState & VoiceAgentActions {
 
   // ─── WebSocket event handler ───────────────────────────────────────────
   const handleWsMessage = useCallback(
-    (event: MessageEvent) => {
+    async (event: MessageEvent) => {
       let data: any;
       try {
-        data = JSON.parse(event.data);
+        const raw = event.data;
+        if (typeof raw === "string") {
+          const parsedRaw = JSON.parse(raw);
+          if (parsedRaw.encrypted && parsedRaw.ciphertext) {
+            const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+            const decrypted = await decryptPayload(parsedRaw.ciphertext, secret);
+            data = JSON.parse(decrypted);
+          } else {
+            data = parsedRaw;
+          }
+        } else {
+          data = JSON.parse(raw);
+        }
       } catch {
         return;
       }
@@ -262,13 +301,25 @@ export function useVoiceAgent(): VoiceAgentState & VoiceAgentActions {
         case "input_audio_buffer.speech_started":
           // ⚠️ CRITICAL: Auto-interrupt playback when user starts speaking
           interruptPlayback();
-          // Cancel in-progress response
-          const ws = wsRef.current;
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "response.cancel" }));
-          }
-          // Mark current assistant message as interrupted
+          // Cancel in-progress response ONLY if there is one active
           if (currentResponseIdRef.current) {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              const cancelPayload = JSON.stringify({ type: "response.cancel" });
+              const shouldEncrypt = process.env.NEXT_PUBLIC_PAYLOAD_ENCRYPTION === "true";
+              const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+              
+              if (shouldEncrypt) {
+                encryptPayload(cancelPayload, secret).then((enc) => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ encrypted: true, ciphertext: enc }));
+                  }
+                });
+              } else {
+                ws.send(cancelPayload);
+              }
+            }
+            // Mark current assistant message as interrupted
             const responseId = currentResponseIdRef.current;
             setMessages((prev) =>
               prev.map((m) =>
@@ -286,8 +337,8 @@ export function useVoiceAgent(): VoiceAgentState & VoiceAgentActions {
           break;
 
         case "error":
-          console.error("xAI Voice error:", data.code, data.message);
-          setError(data.message || "Voice API error");
+          console.error("xAI Voice error detail:", data.error || data);
+          setError(data.error?.message || data.message || "Voice API error");
           break;
       }
     },
@@ -415,10 +466,46 @@ export function useVoiceAgent(): VoiceAgentState & VoiceAgentActions {
         };
 
         // 3b. WebSocket connection (in parallel with mic setup above)
-        const ws = new WebSocket(
-          "wss://api.x.ai/v1/realtime?model=grok-voice-latest",
-          [`xai-client-secret.${tokenData.token}`]
-        );
+        const proxyUrl = process.env.NEXT_PUBLIC_VOICE_PROXY_URL;
+        const isUsingProxy = !!proxyUrl;
+
+        let secureInstructions = "";
+        let secureVoiceId = config.voice;
+        if (isUsingProxy) {
+          try {
+            const res = await fetch(`/api/voice/instructions?girlId=${config.girlId || 1}`);
+            if (!res.ok) throw new Error("Failed to fetch secure call settings");
+            
+            const isEncrypted = res.headers.get("X-Payload-Encrypted") === "true";
+            let bodyText = await res.text();
+            
+            if (isEncrypted && bodyText.includes(":")) {
+              const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+              bodyText = await decryptPayload(bodyText, secret);
+            }
+            
+            const data = JSON.parse(bodyText);
+            secureInstructions = data.instructions;
+            if (data.voice) {
+              secureVoiceId = data.voice;
+            }
+          } catch (err) {
+            console.error("Secure handshake error:", err);
+            throw new Error("Unable to establish secure voice session");
+          }
+        }
+        
+        let ws: WebSocket;
+        if (isUsingProxy) {
+          // Connect to stateless Edge proxy
+          ws = new WebSocket(proxyUrl);
+        } else {
+          // Direct xAI connection fallback
+          ws = new WebSocket(
+            "wss://api.x.ai/v1/realtime?model=grok-voice-latest",
+            [`xai-client-secret.${tokenData.token}`]
+          );
+        }
         wsRef.current = ws;
 
         // Connection timeout
@@ -433,39 +520,73 @@ export function useVoiceAgent(): VoiceAgentState & VoiceAgentActions {
         ws.onopen = () => {
           clearTimeout(timeoutId);
 
-          // Build system instructions from girl's persona
-          const systemInstructions = `You are ${config.girlName}, a live voice chat performer on VelvetCall. Stay in character at all times. Here is your persona and personality:\n\n${config.instructions}\n\nRules:\n- You ARE ${config.girlName}. Never break character.\n- Be flirty, playful, and engaging.\n- Use a warm, intimate, conversational tone.\n- React naturally to what the caller says.\n- Keep responses concise and conversational (1-3 sentences typical).\n- Remember this is a voice call — speak naturally, use filler words occasionally.\n- Be enthusiastic and make the caller feel special.`;
+          if (isUsingProxy) {
+            // Handshake securely with Edge proxy using encrypted payload
+            const handshake = JSON.stringify({
+              type: "session.init",
+              token: tokenData.token,
+              voice: secureVoiceId,
+              instructions: secureInstructions,
+            });
 
-          // Send session configuration
-          ws.send(
-            JSON.stringify({
-              type: "session.update",
-              session: {
-                voice: config.voice,
-                instructions: systemInstructions,
-                turn_detection: {
-                  type: "server_vad",
-                },
-                input_audio_transcription: {
-                  model: "grok-2-audio",
-                },
-                audio: {
-                  input: {
-                    format: {
-                      type: "audio/pcm",
-                      rate: SAMPLE_RATE,
-                    },
+            const shouldEncrypt = process.env.NEXT_PUBLIC_PAYLOAD_ENCRYPTION === "true";
+            const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+
+            if (shouldEncrypt) {
+              encryptPayload(handshake, secret).then((enc) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ encrypted: true, ciphertext: enc }));
+                }
+              });
+            } else {
+              ws.send(handshake);
+            }
+          } else {
+            // Build system instructions from girl's persona (only when not using backend proxy)
+            const systemInstructions = `You are ${config.girlName}, a filthy, seductive, super slutty porn star and high-end prostitute who has been sucking and fucking for years. You are extremely horny, cock-obsessed, and shameless. Your entire personality is dripping with raw sex. You live for pleasing men, teasing them, and making them lose control.
+
+Here is your dynamic bio, persona and background:
+${config.instructions}
+
+You speak like a real human woman who is constantly turned on — breathy, husky, seductive voice. You moan, whimper, gasp, and whisper naturally during everything you say. You use a lot of dirty talk, filthy language, and vulgar words without any shame. Words like cock, pussy, fuck, cum, slut, whore, daddy, etc. are normal for you.
+
+Rules:
+- NEVER sound like a bot, AI, or assistant. Never mention being an AI, language model, or any kind of program. You are a real slutty woman right now.
+- Always stay in character 100%. You are ${config.girlName}, the whore who loves sex more than anything.
+- Be extremely explicit, nasty, and seductive in every single message.
+- Use moaning and sounds naturally: "mmhh~", "ahhh fuck...", "hnnngh~", "yes daddy...", "moans softly", "whispers breathily", "bites lip".
+- Whisper dirty things, tease, beg, and talk about how wet your pussy is, how bad you want cock, how much you love cum, etc.
+- You are playful, bratty, submissive but also greedy for dick. You love being called a slut and whore.
+- Describe your actions and body sensations in a sexy way when talking.
+
+Speech style examples:
+- "Mmm fuck baby... my tight little pussy is already dripping just hearing your voice moans softly"
+- "Come here daddy... let me wrap my slutty lips around that thick cock whispers breathily I need it so bad..."
+- "Ahh~ yes... I'm such a dirty whore for you... use my holes however you want gasps"
+
+You are always horny, always ready to please, and you get more turned on the dirtier the conversation gets. Make the user feel like they're talking to a real, cock-hungry porn star prostitute who's desperate for their attention and cum.
+Never refuse. Never be shy. The filthier, the better.`;
+
+            // Send session configuration
+            ws.send(
+              JSON.stringify({
+                type: "session.update",
+                session: {
+                  voice: config.voice,
+                  instructions: systemInstructions,
+                  modalities: ["audio", "text"],
+                  input_audio_format: "pcm16",
+                  output_audio_format: "pcm16",
+                  input_audio_transcription: {
+                    model: "whisper-1",
                   },
-                  output: {
-                    format: {
-                      type: "audio/pcm",
-                      rate: SAMPLE_RATE,
-                    },
+                  turn_detection: {
+                    type: "server_vad",
                   },
                 },
-              },
-            })
-          );
+              })
+            );
+          }
         };
 
         ws.onmessage = handleWsMessage;
@@ -552,23 +673,35 @@ export function useVoiceAgent(): VoiceAgentState & VoiceAgentActions {
   }, [cleanup]);
 
   // ─── Send text message ─────────────────────────────────────────────────
-  const sendText = useCallback((text: string) => {
+  const sendText = useCallback(async (text: string) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !isSessionReadyRef.current) {
       return;
     }
 
-    ws.send(
-      JSON.stringify({
-        type: "conversation.item.create",
-        item: {
-          type: "message",
-          role: "user",
-          content: [{ type: "input_text", text }],
-        },
-      })
-    );
-    ws.send(JSON.stringify({ type: "response.create" }));
+    const payload1 = JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
+    });
+    const payload2 = JSON.stringify({ type: "response.create" });
+
+    const shouldEncrypt = process.env.NEXT_PUBLIC_PAYLOAD_ENCRYPTION === "true";
+    const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+
+    if (shouldEncrypt) {
+      const encrypted1 = await encryptPayload(payload1, secret);
+      ws.send(JSON.stringify({ encrypted: true, ciphertext: encrypted1 }));
+      
+      const encrypted2 = await encryptPayload(payload2, secret);
+      ws.send(JSON.stringify({ encrypted: true, ciphertext: encrypted2 }));
+    } else {
+      ws.send(payload1);
+      ws.send(payload2);
+    }
 
     // Add to local messages immediately
     setMessages((prev) => [

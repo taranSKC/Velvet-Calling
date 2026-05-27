@@ -43,7 +43,7 @@ function GirlsContent() {
   const FilterChip = ({ label, value, active, onClick }: { label: string; value: string; active: boolean; onClick: () => void }) => (
     <button
       onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-xs transition-all duration-150 active:scale-95 cursor-pointer"
+      className="px-3 py-1.5 rounded-full text-xs transition-all duration-150 cursor-pointer"
       style={{
         background: active ? "rgba(196,30,58,0.22)" : "rgba(255,255,255,0.04)",
         border: active ? "1px solid rgba(196,30,58,0.45)" : "1px solid rgba(255,255,255,0.07)",
@@ -99,7 +99,7 @@ function GirlsContent() {
         <button
           onClick={() => setShowFilters(!showFilters)}
           data-testid="button-toggle-filters"
-          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-150 active:scale-95 shrink-0 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-150 shrink-0 cursor-pointer"
           style={{
             background: showFilters ? "rgba(196,30,58,0.18)" : "rgba(255,255,255,0.05)",
             border: showFilters ? "1px solid rgba(196,30,58,0.4)" : "1px solid rgba(255,255,255,0.08)",

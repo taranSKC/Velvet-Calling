@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useGetWallet, getGetWalletQueryKey } from "@workspace/api-client-react";
+import { useGetWallet, getGetWalletQueryKey, customFetch } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -30,36 +30,66 @@ function WalletContent() {
 
   const success = searchParams.get("success");
   const canceled = searchParams.get("canceled");
+  const sessionId = searchParams.get("session_id");
 
   // Secure URL feedback hook for completed/canceled checkouts
   useEffect(() => {
-    if (success === "true") {
-      queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
-      toast({ title: "Payment Successful! 🎉", description: "Your wallet has been securely credited." });
-      router.replace("/wallet");
-    } else if (canceled === "true") {
-      toast({ title: "Payment Canceled", description: "Your transactions were canceled.", variant: "destructive" });
-      router.replace("/wallet");
+    async function verifyPayment() {
+      if (success === "true" && sessionId) {
+        try {
+          setIsRedirecting(true);
+          const data = await customFetch<{ success?: boolean; newBalance?: number; error?: string }>("/api/stripe/verify", {
+            method: "POST",
+            body: JSON.stringify({ sessionId }),
+          });
+          if (data && data.success) {
+            queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+            toast({ title: "Payment Successful! 🎉", description: "Your wallet has been securely credited." });
+          } else {
+            toast({
+              title: "Verification Failed",
+              description: data?.error || "We could not verify your payment securely.",
+              variant: "destructive",
+            });
+          }
+        } catch (err: any) {
+          toast({
+            title: "Verification Error",
+            description: err?.message || "An error occurred while verifying your payment.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsRedirecting(false);
+          router.replace("/wallet");
+        }
+      } else if (success === "true") {
+        queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() });
+        toast({ title: "Payment Completed", description: "Refreshing your credits wallet balance." });
+        router.replace("/wallet");
+      } else if (canceled === "true") {
+        toast({ title: "Payment Canceled", description: "Your transactions were canceled.", variant: "destructive" });
+        router.replace("/wallet");
+      }
     }
-  }, [success, canceled, queryClient, router, toast]);
+    
+    verifyPayment();
+  }, [success, canceled, sessionId, queryClient, router, toast]);
 
   const handleTopUp = async (amount: number) => {
     try {
       setIsRedirecting(true);
-      const res = await fetch("/api/stripe/checkout", {
+      const data = await customFetch<{ url?: string; error?: string }>("/api/stripe/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount }),
       });
-      const data = await res.json();
-      if (data.url) {
+      if (data && data.url) {
         window.location.href = data.url;
       } else {
-        toast({ title: "Payment Initiation Failed", description: data.error || "Could not start checkout", variant: "destructive" });
+        toast({ title: "Payment Initiation Failed", description: data?.error || "Could not start checkout", variant: "destructive" });
         setIsRedirecting(false);
       }
     } catch (err: any) {
-      toast({ title: "Payment Error", description: err.message || "An error occurred", variant: "destructive" });
+      toast({ title: "Payment Error", description: err?.message || "An error occurred", variant: "destructive" });
       setIsRedirecting(false);
     }
   };
@@ -127,7 +157,7 @@ function WalletContent() {
               onClick={() => handleTopUp(amt.usd)}
               disabled={isLoading || isRedirecting}
               data-testid={`button-topup-${amt.credits}`}
-              className="py-2 rounded-xl font-bold transition-all active:scale-90 hover:scale-105 cursor-pointer flex flex-col items-center justify-center gap-0.5"
+              className="py-2 rounded-xl font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5"
               style={{ background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.22)", color: "hsl(43 74% 68%)", ...label }}
             >
               <span className="text-sm sm:text-base font-extrabold">{amt.credits}</span>
@@ -160,7 +190,7 @@ function WalletContent() {
               onClick={handleCustomTopUp}
               disabled={isLoading || isRedirecting || !customAmount}
               data-testid="button-topup-custom"
-              className="px-5 sm:px-6 py-3 rounded-xl font-bold text-white transition-all active:scale-90 shrink-0 cursor-pointer flex items-center gap-2"
+              className="px-5 sm:px-6 py-3 rounded-xl font-bold text-white transition-all shrink-0 cursor-pointer flex items-center gap-2"
               style={{
                 background: isRedirecting ? "rgba(196,30,58,0.4)" : "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 48%))",
                 ...label, fontSize: "0.68rem",

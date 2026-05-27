@@ -52,7 +52,7 @@ export default function AgeGate({ onVerify, onDecline }: AgeGateProps) {
           <button
             onClick={onVerify}
             data-testid="button-age-verify"
-            className="btn-pulse w-full py-4 rounded-xl font-semibold text-white transition-all duration-200 active:scale-95"
+            className="btn-pulse w-full py-4 rounded-xl font-semibold text-white transition-all duration-200"
             style={{
               background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 48%))",
               fontFamily: "'Raleway', sans-serif",
@@ -66,7 +66,7 @@ export default function AgeGate({ onVerify, onDecline }: AgeGateProps) {
           <button
             onClick={onDecline}
             data-testid="button-age-decline"
-            className="w-full py-3.5 rounded-xl font-medium transition-all duration-200 active:scale-95"
+            className="w-full py-3.5 rounded-xl font-medium transition-all duration-200"
             style={{
               background: "rgba(255,255,255,0.04)",
               color: "hsl(30 5% 50%)",

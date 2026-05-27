@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, walletTable, transactionsTable } from "@workspace/db";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
+import { getOrCreateWallet } from "../../wallet/route";
+import { secureRoute } from "@/utils/crypto";
 
 // ─── Server-side rate limit: max 1 deduction per 50 seconds ─────────────
 // This is a safety net — the client should only call once per 60s,
@@ -10,14 +12,15 @@ import { eq, sql, desc } from "drizzle-orm";
 const lastDeductionTime = new Map<string, number>();
 const MIN_DEDUCTION_INTERVAL_MS = 50_000; // 50 seconds (allows slight clock drift)
 
-export async function POST(request: Request) {
+export const POST = secureRoute(async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json(
       { error: "Authentication required" },
       { status: 401 }
     );
   }
+  const userId = session.user.id;
 
   try {
     const { girlId, girlName, pricePerMin } = await request.json();
@@ -30,7 +33,6 @@ export async function POST(request: Request) {
     }
 
     // ─── Rate limit check ──────────────────────────────────────────
-    const userId = session.user.id || session.user.email || "default";
     const rateKey = `${userId}:${girlId}`;
     const now = Date.now();
     const lastTime = lastDeductionTime.get(rateKey) || 0;
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     // ─── Check current balance ─────────────────────────────────────
-    const [wallet] = await db.select().from(walletTable).limit(1);
+    const wallet = await getOrCreateWallet(userId);
 
     if (!wallet || wallet.balance < pricePerMin) {
       return NextResponse.json(
@@ -64,7 +66,12 @@ export async function POST(request: Request) {
     const [recentTransaction] = await db
       .select()
       .from(transactionsTable)
-      .where(eq(transactionsTable.type, "call"))
+      .where(
+        and(
+          eq(transactionsTable.userId, userId),
+          eq(transactionsTable.type, "call")
+        )
+      )
       .orderBy(desc(transactionsTable.createdAt))
       .limit(1);
 
@@ -85,17 +92,18 @@ export async function POST(request: Request) {
         balance: sql`GREATEST(${walletTable.balance} - ${pricePerMin}, 0)`,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(walletTable.id, wallet.id));
+      .where(eq(walletTable.userId, userId));
 
     // ─── Log transaction ───────────────────────────────────────────
     await db.insert(transactionsTable).values({
+      userId,
       type: "call",
       amount: -pricePerMin,
       description: `Voice call with ${girlName || "performer"} (1 min)`,
     });
 
     // Re-read actual balance (atomic read after write)
-    const [updatedWallet] = await db.select().from(walletTable).where(eq(walletTable.id, wallet.id)).limit(1);
+    const [updatedWallet] = await db.select().from(walletTable).where(eq(walletTable.userId, userId)).limit(1);
     const newBalance = updatedWallet?.balance ?? 0;
 
     return NextResponse.json({
@@ -109,4 +117,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
+});

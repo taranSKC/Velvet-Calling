@@ -119,7 +119,7 @@ export default function VideosPage() {
             key={s.value}
             onClick={() => setSort(s.value)}
             data-testid={`sort-${s.value}`}
-            className="px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl transition-all shrink-0 cursor-pointer"
             style={{
               background: sort === s.value ? "rgba(196,30,58,0.18)" : "rgba(255,255,255,0.05)",
               border: sort === s.value ? "1px solid rgba(196,30,58,0.4)" : "1px solid rgba(255,255,255,0.07)",
@@ -136,7 +136,7 @@ export default function VideosPage() {
             key={cat}
             onClick={() => setCategory(cat)}
             data-testid={`category-${cat.toLowerCase()}`}
-            className="px-3.5 py-2 rounded-xl transition-all active:scale-95 shrink-0 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl transition-all shrink-0 cursor-pointer"
             style={{
               background: category === cat ? "rgba(196,30,58,0.18)" : "rgba(255,255,255,0.04)",
               border: category === cat ? "1px solid rgba(196,30,58,0.4)" : "1px solid rgba(255,255,255,0.07)",
@@ -170,7 +170,7 @@ export default function VideosPage() {
                 <img
                   src={video.thumbnailUrl}
                   alt={video.title}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-500"
                   style={{ filter: video.isPremium ? "blur(3px) brightness(0.45)" : "brightness(0.82)" }}
                 />
                 <div

@@ -111,7 +111,7 @@ export default function VoiceCallOverlay({
       >
         <button
           onClick={onDisconnect}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all cursor-pointer"
           style={{
             background: "rgba(196,30,58,0.15)",
             border: "1px solid rgba(196,30,58,0.35)",
@@ -429,7 +429,7 @@ export default function VoiceCallOverlay({
               <button
                 onClick={handleSendText}
                 disabled={!textInput.trim()}
-                className="p-2 rounded-xl transition-all active:scale-90 cursor-pointer"
+                className="p-2 rounded-xl transition-all cursor-pointer"
                 style={{
                   background: textInput.trim()
                     ? "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 48%))"
@@ -451,7 +451,7 @@ export default function VoiceCallOverlay({
         {/* Mute button */}
         <button
           onClick={onToggleMute}
-          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer"
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all cursor-pointer"
           style={{
             background: isMuted
               ? "rgba(196,30,58,0.2)"
@@ -471,7 +471,7 @@ export default function VoiceCallOverlay({
         {/* End Call button */}
         <button
           onClick={onDisconnect}
-          className="w-16 h-16 sm:w-18 sm:h-18 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer velvet-glow"
+          className="w-16 h-16 sm:w-18 sm:h-18 rounded-full flex items-center justify-center transition-all cursor-pointer velvet-glow"
           style={{
             background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 50%))",
             boxShadow: "0 0 20px rgba(196,30,58,0.4), 0 4px 16px rgba(0,0,0,0.5)",
@@ -483,7 +483,7 @@ export default function VoiceCallOverlay({
         {/* Chat toggle */}
         <button
           onClick={() => setShowChat(!showChat)}
-          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer"
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all cursor-pointer"
           style={{
             background: showChat
               ? "rgba(196,30,58,0.15)"

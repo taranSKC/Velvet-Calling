@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { secureRoute } from "@/utils/crypto";
 
-export async function POST() {
+export const POST = secureRoute(async function POST() {
   // Verify user is authenticated
   const session = await auth();
   if (!session?.user) {
@@ -57,4 +58,4 @@ export async function POST() {
       { status: 500 }
     );
   }
-}
+});

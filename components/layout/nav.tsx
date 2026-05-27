@@ -96,7 +96,7 @@ export default function Nav() {
               </Link>
             )}
 
-            <Link href="/girls" data-testid="link-nav-browse" className="hidden sm:inline-flex items-center px-4 py-2 rounded-lg text-xs font-bold text-white cursor-pointer transition-all duration-200 active:scale-95"
+            <Link href="/girls" data-testid="link-nav-browse" className="hidden sm:inline-flex items-center px-4 py-2 rounded-lg text-xs font-bold text-white cursor-pointer transition-all duration-200"
               style={{
                 background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 50%))",
                 fontFamily: "'Raleway', sans-serif",
@@ -122,14 +122,14 @@ export default function Nav() {
                 </div>
                 <button
                   onClick={() => signOut()}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-purple-200/70 hover:text-white cursor-pointer active:scale-95 transition-all"
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-purple-200/70 hover:text-white cursor-pointer transition-all"
                   style={{ fontFamily: "'Raleway', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em" }}
                 >
                   Sign Out
                 </button>
               </div>
             ) : (
-              <Link href="/login" data-testid="link-nav-login" className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-xs font-bold border border-fuchsia-800/40 text-fuchsia-200 hover:text-white cursor-pointer active:scale-95 transition-all bg-fuchsia-950/20"
+              <Link href="/login" data-testid="link-nav-login" className="inline-flex items-center px-3.5 py-1.5 rounded-lg text-xs font-bold border border-fuchsia-800/40 text-fuchsia-200 hover:text-white cursor-pointer transition-all bg-fuchsia-950/20"
                 style={{ fontFamily: "'Raleway', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em" }}
               >
                 Sign In
@@ -154,7 +154,7 @@ export default function Nav() {
           {navLinks.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
             return (
-              <Link key={href} href={href} className="flex flex-col items-center gap-1 cursor-pointer px-3 py-1.5 rounded-xl transition-all duration-200 active:scale-90"
+              <Link key={href} href={href} className="flex flex-col items-center gap-1 cursor-pointer px-3 py-1.5 rounded-xl transition-all duration-200"
                 style={{
                   color: active ? "hsl(0 72% 65%)" : "hsl(30 5% 48%)",
                   background: active ? "rgba(196,30,58,0.1)" : "transparent",

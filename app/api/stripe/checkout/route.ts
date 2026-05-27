@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { auth } from "@/lib/auth";
+import { secureRoute } from "@/utils/crypto";
 
-export async function POST(request: Request) {
+export const POST = secureRoute(async function POST(request: Request) {
   try {
+    const sessionUser = await auth();
+    if (!sessionUser?.user?.id) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    const userId = sessionUser.user.id;
+
     const { amount } = await request.json();
     const parsedAmount = parseFloat(amount);
 
@@ -36,7 +44,9 @@ export async function POST(request: Request) {
       mode: "payment",
       success_url: `${origin}/wallet?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/wallet?canceled=true`,
+      client_reference_id: userId,
       metadata: {
+        userId: userId,
         amount: String(parsedAmount),
         credits: String(parsedAmount * 10),
       },
@@ -47,4 +57,4 @@ export async function POST(request: Request) {
     console.error("Stripe Checkout Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
+});

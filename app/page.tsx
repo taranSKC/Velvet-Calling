@@ -124,7 +124,7 @@ export default function HomePage() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-xs sm:max-w-none">
           <Link href="/girls" data-testid="button-browse-girls-hero">
             <span
-              className="btn-pulse velvet-glow inline-flex items-center justify-center gap-2.5 w-full sm:w-auto px-8 sm:px-10 py-4 rounded-full font-bold text-white cursor-pointer transition-all duration-300 active:scale-95"
+              className="btn-pulse velvet-glow inline-flex items-center justify-center gap-2.5 w-full sm:w-auto px-8 sm:px-10 py-4 rounded-full font-bold text-white cursor-pointer transition-all duration-300"
               style={{
                 background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 50%))",
                 boxShadow: "0 0 30px rgba(196,30,58,0.4)",
@@ -141,7 +141,7 @@ export default function HomePage() {
           </Link>
           <Link href="/live" data-testid="button-live-now-hero">
             <span
-              className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-4 rounded-full cursor-pointer transition-all duration-300 active:scale-95"
+              className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 py-4 rounded-full cursor-pointer transition-all duration-300"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(255,255,255,0.1)",
@@ -231,7 +231,7 @@ export default function HomePage() {
                   <img
                     src={cat.imageUrl}
                     alt={cat.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    className="w-full h-full object-cover transition-transform duration-500"
                   />
                   <div
                     className="absolute inset-0"

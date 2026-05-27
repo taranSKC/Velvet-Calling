@@ -48,7 +48,7 @@ export default function FavoritesPage() {
           </p>
           <Link href="/girls" data-testid="link-browse-from-favorites">
             <span
-              className="inline-block px-7 py-3 rounded-full font-bold text-white cursor-pointer active:scale-95 transition-transform"
+              className="inline-block px-7 py-3 rounded-full font-bold text-white cursor-pointer transition-transform"
               style={{ background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 48%))", ...label, fontSize: "0.68rem" }}
             >
               Browse Performers

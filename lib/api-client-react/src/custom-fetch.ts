@@ -1,3 +1,5 @@
+import { encryptPayload, decryptPayload } from "../../../utils/crypto";
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
@@ -337,12 +339,21 @@ export async function customFetch<T = unknown>(
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
+  const shouldEncrypt = process.env.NEXT_PUBLIC_PAYLOAD_ENCRYPTION === "true";
+  const secret = process.env.NEXT_PUBLIC_ENCRYPTION_KEY || "velvet-call-secret-key-32-chars-long!";
+
+  let bodyToPass = init.body;
   if (
-    typeof init.body === "string" &&
+    typeof bodyToPass === "string" &&
     !headers.has("content-type") &&
-    looksLikeJson(init.body)
+    looksLikeJson(bodyToPass)
   ) {
     headers.set("content-type", "application/json");
+  }
+
+  if (shouldEncrypt && bodyToPass != null && typeof bodyToPass === "string") {
+    bodyToPass = await encryptPayload(bodyToPass, secret);
+    headers.set("content-type", "text/plain");
   }
 
   if (responseType === "json" && !headers.has("accept")) {
@@ -360,12 +371,32 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, { ...init, method, headers, body: bodyToPass });
 
-  if (!response.ok) {
-    const errorData = await parseErrorBody(response, method);
-    throw new ApiError(response, errorData, requestInfo);
+  let responseToParse = response;
+  const isEncrypted = response.headers.get("X-Payload-Encrypted") === "true";
+  if (shouldEncrypt && isEncrypted) {
+    try {
+      const encryptedText = await response.text();
+      const decryptedText = await decryptPayload(encryptedText, secret);
+
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set("Content-Type", "application/json");
+
+      responseToParse = new Response(decryptedText, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    } catch (err) {
+      console.error("Failed to decrypt API response:", err);
+    }
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  if (!responseToParse.ok) {
+    const errorData = await parseErrorBody(responseToParse, method);
+    throw new ApiError(responseToParse, errorData, requestInfo);
+  }
+
+  return (await parseSuccessBody(responseToParse, responseType, requestInfo)) as T;
 }

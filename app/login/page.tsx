@@ -261,7 +261,7 @@ function LoginContent() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full h-11 bg-gradient-to-r from-fuchsia-600 via-pink-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-fuchsia-600/10 active:scale-[0.98] transition-all mt-6"
+                className="w-full h-11 bg-gradient-to-r from-fuchsia-600 via-pink-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-fuchsia-600/10 transition-all mt-6"
               >
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -356,7 +356,7 @@ function LoginContent() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full h-11 bg-gradient-to-r from-fuchsia-600 via-pink-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-fuchsia-600/10 active:scale-[0.98] transition-all mt-6"
+                className="w-full h-11 bg-gradient-to-r from-fuchsia-600 via-pink-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-medium rounded-xl shadow-lg shadow-fuchsia-600/10 transition-all mt-6"
               >
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">

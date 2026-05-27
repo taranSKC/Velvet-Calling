@@ -1,5 +1,6 @@
 "use client";
 
+import { getFrontendVoiceConfig } from "@/utils/voice-registry";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -17,12 +18,13 @@ import {
   getGetWalletQueryKey,
   getGetChatMessagesQueryKey,
   getGetGirlQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useVoiceAgent } from "@/hooks/use-voice-agent";
 import VoiceCallOverlay from "@/components/voice-call-overlay";
-import { Video, MessageSquare, Heart, Lock, Star, Send, ChevronRight, ArrowLeft, X, Phone } from "lucide-react";
+import { Video, MessageSquare, Heart, Lock, Star, Send, ChevronRight, ArrowLeft, X, Phone, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 const TIP_AMOUNTS = [5, 10, 25, 50];
@@ -31,15 +33,7 @@ const serif: React.CSSProperties = { fontFamily: "'Cormorant Garamond', serif" }
 const sans: React.CSSProperties = { fontFamily: "'Raleway', sans-serif" };
 const label: React.CSSProperties = { fontFamily: "'Raleway', sans-serif", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", fontSize: "0.62rem" };
 
-// Voice-to-girl mapping — each girl gets a unique xAI voice persona
-const VOICE_MAP: Record<string, string> = {
-  "Ava Sinclair": "Ara",
-  "Chloe Hart": "Eve",
-  "Emma Thorne": "Sal",
-  "Yuki Sakura": "Eve",
-  "Naomi Brooks": "Ara",
-};
-const DEFAULT_VOICE = "Eve";
+
 
 export default function GirlProfilePage() {
   const params = useParams();
@@ -56,6 +50,7 @@ export default function GirlProfilePage() {
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const billingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const [isClearingChat, setIsClearingChat] = useState(false);
 
   // xAI Voice Agent
   const voiceAgent = useVoiceAgent();
@@ -82,19 +77,109 @@ export default function GirlProfilePage() {
 
   const isFavorite = favorites?.some((f) => f.id === girlId) ?? false;
 
+  const [optimisticMessages, setOptimisticMessages] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (messages) {
+      setOptimisticMessages(messages);
+    }
+  }, [messages]);
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [optimisticMessages, sendMessage.isPending]);
 
   const handleSendMessage = () => {
     if (!session?.user) return;
     if (!chatInput.trim()) return;
+
+    // Quick client-side check: 1 credit = $0.10 USD
+    if (!wallet || wallet.balance < 0.10) {
+      toast({
+        title: "Insufficient credits 🔒",
+        description: "You need at least 1 Credit ($0.10) to chat. Please top up your wallet.",
+        variant: "destructive",
+      });
+      router.push("/wallet");
+      return;
+    }
+
     const content = chatInput;
     setChatInput("");
+
+    // 1. Create a temporary optimistic message object
+    const tempUserMsg = {
+      id: Date.now(), // temporary unique id
+      girlId,
+      content,
+      sender: "user",
+      createdAt: new Date().toISOString(),
+    };
+
+    // 2. Append user message right away so it displays immediately!
+    setOptimisticMessages((prev) => [...prev, tempUserMsg]);
+
     sendMessage.mutate(
       { girlId, data: { content } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetChatMessagesQueryKey(girlId) }) }
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetChatMessagesQueryKey(girlId) });
+          queryClient.invalidateQueries({ queryKey: getGetWalletQueryKey() }); // Refresh wallet balance on profile
+        },
+        onError: (err: any) => {
+          // Revert optimistic update on error
+          if (messages) {
+            setOptimisticMessages(messages);
+          }
+
+          const errorData = err?.data || {};
+          const errorCode = errorData.error || "";
+          
+          if (errorCode === "insufficient_balance" || err?.status === 402) {
+            toast({
+              title: "Insufficient credits 🔒",
+              description: "You need at least 1 Credit ($0.10) to chat. Please top up your wallet.",
+              variant: "destructive",
+            });
+            router.push("/wallet");
+          } else {
+            toast({
+              title: "Error sending message",
+              description: errorData.message || err.message || "Failed to send message.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
     );
+  };
+
+  const handleCleanChat = async () => {
+    if (!session?.user) return;
+    if (!confirm("Are you sure you want to clear your chat history with this performer?")) return;
+    
+    setIsClearingChat(true);
+    try {
+      const response = await customFetch<{ success?: boolean; message?: string }>(`/api/chat/${girlId}`, {
+        method: "DELETE",
+      });
+      if (response?.success) {
+        queryClient.invalidateQueries({ queryKey: getGetChatMessagesQueryKey(girlId) });
+        toast({
+          title: "Chat cleared ✨",
+          description: `${girl?.name} is ready for a fresh conversation!`,
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to clear chat:", err);
+      toast({
+        title: "Failed to clear chat",
+        description: err?.message || "Something went wrong.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClearingChat(false);
+    }
   };
 
   const handleTip = (amount: number) => {
@@ -150,10 +235,12 @@ export default function GirlProfilePage() {
       return;
     }
 
-    const voice = VOICE_MAP[girl.name] || DEFAULT_VOICE;
+    const voiceConfig = getFrontendVoiceConfig(girl.name);
+    const voice = voiceConfig.voiceId;
     setLiveBalance(wallet.balance);
 
     await voiceAgent.connect({
+      girlId,
       voice,
       instructions: girl.bio,
       girlName: girl.name,
@@ -222,21 +309,32 @@ export default function GirlProfilePage() {
 
       isDeductingRef.current = true;
       try {
-        const res = await fetch("/api/voice/deduct", {
+        const data = await customFetch<{
+          success?: boolean;
+          newBalance?: number;
+          error?: string;
+          message?: string;
+        }>("/api/voice/deduct", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             girlId: billingGirlId,
             girlName: billingGirlName,
             pricePerMin: billingPricePerMin,
           }),
         });
-        const data = await res.json();
 
         // Check if billing was stopped while the request was in-flight
         if (!isBillingActiveRef.current) return;
 
-        if (data.error === "insufficient_balance") {
+        if (data?.success) {
+          setLiveBalance(data.newBalance ?? null);
+        }
+      } catch (err: any) {
+        // Handle ApiError thrown by customFetch for non-2xx status codes
+        const errorData = err?.data || {};
+        const errorCode = errorData.error || "";
+
+        if (errorCode === "insufficient_balance" || err?.status === 402) {
           toastRef.current({
             title: "Call Ended",
             description: "Insufficient balance. Please top up your wallet.",
@@ -246,15 +344,10 @@ export default function GirlProfilePage() {
           return;
         }
 
-        // Server rate-limited us — just wait for next interval
-        if (data.error === "rate_limited") {
-          return;
+        if (errorCode === "rate_limited" || err?.status === 429) {
+          return; // Server rate-limited us — just wait for next interval
         }
 
-        if (data.success) {
-          setLiveBalance(data.newBalance);
-        }
-      } catch (err) {
         console.error("Billing error:", err);
       } finally {
         isDeductingRef.current = false;
@@ -440,7 +533,7 @@ export default function GirlProfilePage() {
                   <button
                     onClick={handleStartCall}
                     data-testid="button-start-call"
-                    className="velvet-glow flex items-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3 rounded-full font-bold text-white active:scale-95 transition-transform cursor-pointer"
+                    className="velvet-glow flex items-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3 rounded-full font-bold text-white transition-transform cursor-pointer"
                     style={{
                       background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 50%))",
                       ...label, fontSize: "0.68rem",
@@ -465,7 +558,7 @@ export default function GirlProfilePage() {
                 </span>
                 <button
                   onClick={handleEndCall}
-                  className="px-2.5 py-1 rounded-full active:scale-95 transition-transform cursor-pointer"
+                  className="px-2.5 py-1 rounded-full transition-transform cursor-pointer"
                   style={{ background: "rgba(196,30,58,0.28)", border: "1px solid rgba(196,30,58,0.45)", color: "hsl(0 72% 68%)", ...label, fontSize: "0.6rem" }}
                 >
                   End Call
@@ -506,7 +599,7 @@ export default function GirlProfilePage() {
             <button
               onClick={handleFavorite}
               data-testid="button-toggle-favorite"
-              className="p-2.5 rounded-xl transition-all duration-200 active:scale-90 shrink-0 ml-3 cursor-pointer"
+              className="p-2.5 rounded-xl transition-all duration-200 shrink-0 ml-3 cursor-pointer"
               style={{
                 background: isFavorite ? "rgba(196,30,58,0.18)" : "rgba(255,255,255,0.05)",
                 border: isFavorite ? "1px solid rgba(196,30,58,0.4)" : "1px solid rgba(255,255,255,0.08)",
@@ -542,19 +635,31 @@ export default function GirlProfilePage() {
             <div className="flex items-center gap-2 p-3.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <MessageSquare size={14} style={{ color: "hsl(0 72% 58%)" }} />
               <span className="text-xs font-semibold" style={{ color: "hsl(30 15% 82%)", ...label }}>Chat with {girl.name}</span>
-              <span className="online-dot w-1.5 h-1.5 rounded-full ml-auto" style={{ background: girl.isOnline ? "#22c55e" : "#6b7280" }} />
+              <span className="online-dot w-1.5 h-1.5 rounded-full" style={{ background: girl.isOnline ? "#22c55e" : "#6b7280" }} />
+              {session?.user && (
+                <button
+                  onClick={handleCleanChat}
+                  disabled={isClearingChat}
+                  title="Clean Chat History"
+                  className="ml-auto p-1 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 text-rose-500 hover:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500/30 select-none border border-rose-500/20"
+                  style={label}
+                >
+                  <Trash2 size={11} />
+                  Clear
+                </button>
+              )}
             </div>
 
             {/* Messages */}
             <div className="h-48 sm:h-60 overflow-y-auto p-3.5 flex flex-col gap-2.5">
-              {!messages || messages.length === 0 ? (
+              {!optimisticMessages || optimisticMessages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-sm text-center" style={{ color: "hsl(30 5% 42%)", ...sans }}>
                     Say hello to {girl.name}…
                   </p>
                 </div>
               ) : (
-                messages.map((msg) => (
+                optimisticMessages.map((msg) => (
                   <div key={msg.id} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
                     {msg.sender === "girl" && (
                       <img src={girl.avatarUrl} alt={girl.name} className="w-5 h-5 rounded-full object-cover object-top mr-1.5 self-end flex-shrink-0" />
@@ -575,6 +680,25 @@ export default function GirlProfilePage() {
                   </div>
                 ))
               )}
+              
+              {/* Dynamic Bouncing-Dots Typing Indicator */}
+              {sendMessage.isPending && (
+                <div className="flex justify-start items-end gap-1.5 animate-pulse">
+                  <img src={girl.avatarUrl} alt={girl.name} className="w-5 h-5 rounded-full object-cover object-top mr-1.5 self-end flex-shrink-0" />
+                  <div
+                    className="max-w-[75%] px-4 py-3 rounded-2xl flex items-center gap-1.5 bg-white/5 border border-white/5"
+                    style={{
+                      borderRadius: "4px 16px 16px 16px",
+                    }}
+                  >
+                    <span className="text-[10px] text-purple-300/40 mr-1 font-semibold uppercase tracking-widest" style={label}>Typing</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400/80 animate-bounce [animation-delay:-0.3s]"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400/80 animate-bounce [animation-delay:-0.15s]"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-400/80 animate-bounce"></span>
+                  </div>
+                </div>
+              )}
+              
               <div ref={chatBottomRef} />
             </div>
 
@@ -605,7 +729,7 @@ export default function GirlProfilePage() {
                 onClick={handleSendMessage}
                 disabled={!chatInput.trim() || sendMessage.isPending}
                 data-testid="button-send-message"
-                className="p-2.5 rounded-xl flex items-center justify-center transition-all active:scale-90 shrink-0 cursor-pointer"
+                className="p-2.5 rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer"
                 style={{ background: "linear-gradient(135deg, hsl(0 72% 36%), hsl(0 72% 48%))", minWidth: "40px", minHeight: "40px" }}
               >
                 <Send size={14} className="text-white" />
@@ -621,7 +745,7 @@ export default function GirlProfilePage() {
                   onClick={() => handleTip(amt)}
                   data-testid={`button-tip-${amt}`}
                   disabled={sendTip.isPending}
-                  className="px-3 py-1.5 rounded-lg font-bold transition-all active:scale-90 hover:scale-105 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer"
                   style={{ background: "rgba(212,168,67,0.12)", border: "1px solid rgba(212,168,67,0.28)", color: "hsl(43 74% 68%)", ...label }}
                 >
                   {(amt * 10)} Credits
@@ -702,7 +826,7 @@ export default function GirlProfilePage() {
                       <img
                         src={photo.thumbnailUrl}
                         alt=""
-                        className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover object-top transition-transform duration-300"
                         style={{ filter: photo.isPremium ? "blur(4px) brightness(0.5)" : "none" }}
                       />
                       {photo.isPremium && (
@@ -722,7 +846,7 @@ export default function GirlProfilePage() {
                     <div
                       key={video.id}
                       onClick={() => handleWatchVideo(video)}
-                      className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-all duration-200 active:scale-98"
+                      className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-all duration-200"
                       style={{ background: "rgba(255,255,255,0.03)" }}
                       data-testid={`video-${video.id}`}
                     >
@@ -752,7 +876,7 @@ export default function GirlProfilePage() {
               )}
 
               <button
-                className="w-full mt-3 py-2.5 rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                className="w-full mt-3 py-2.5 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer"
                 data-testid="button-unlock-collection"
                 style={{
                   background: "linear-gradient(135deg, rgba(212,168,67,0.15), rgba(212,168,67,0.08))",
