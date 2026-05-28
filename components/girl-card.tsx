@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Star, Phone } from "lucide-react";
 
 interface GirlCardProps {
@@ -25,7 +26,7 @@ export default function GirlCard({
   const statusLabel = status === "online" ? "Online" : status === "busy" ? `Busy${availableIn ? ` · ${availableIn}m` : ""}` : "Offline";
 
   return (
-    <Link href={`/girls/${id}`} className="block">
+    <Link href={`/girls/${id}`} className="block" aria-label={`View ${name}'s profile`}>
       <div
         className="glass-card rounded-xl overflow-hidden cursor-pointer group select-none"
         data-testid={`card-girl-${id}`}
@@ -33,11 +34,14 @@ export default function GirlCard({
       >
         {/* Image */}
         <div className="relative overflow-hidden" style={{ aspectRatio: "2/3" }}>
-          <img
+          <Image
             src={avatarUrl}
             alt={name}
-            className="w-full h-full object-cover object-top transition-transform duration-500"
-            loading="lazy"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 20vw, 250px"
+            className="object-cover object-top transition-transform duration-500"
+            loading={index < 4 ? undefined : "lazy"}
+            {...(index < 4 ? { priority: true } : {})}
           />
           {/* Gradient overlay */}
           <div
@@ -91,13 +95,13 @@ export default function GirlCard({
           <div className="absolute bottom-0 left-0 right-0 p-3">
             <div className="flex items-end justify-between">
               <div>
-                <h3
+                <h2
                   className="font-semibold text-white leading-tight"
                   style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.15rem", fontStyle: "italic" }}
                 >
                   {name}
                   <span className="font-light text-sm not-italic opacity-80 ml-1">{age}</span>
-                </h3>
+                </h2>
                 {shortBio && (
                   <p
                     className="text-xs mt-0.5 line-clamp-1"

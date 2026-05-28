@@ -32,11 +32,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "hsl(240 15% 4%)", color: "hsl(30 15% 92%)" }}>
+    <>
       {!ageVerified && <AgeGate onVerify={handleVerify} onDecline={handleDecline} />}
       <Nav />
-      <main className="pb-16 md:pb-0">{children}</main>
+      <main className="pb-16 md:pb-0" style={{ background: "hsl(240 15% 4%)", color: "hsl(30 15% 92%)" }}>{children}</main>
       <Toaster />
-    </div>
+    </>
   );
 }

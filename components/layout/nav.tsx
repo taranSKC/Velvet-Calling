@@ -26,6 +26,7 @@ export default function Nav() {
       {/* Top nav */}
       <nav
         className="sticky top-0 z-50 w-full"
+        aria-label="Main Navigation"
         style={{
           background: "rgba(8,6,16,0.96)",
           backdropFilter: "blur(24px)",
@@ -35,7 +36,7 @@ export default function Nav() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Logo */}
-          <Link href="/" data-testid="link-home-logo" className="flex items-center cursor-pointer select-none shrink-0">
+          <Link href="/" data-testid="link-home-logo" className="flex items-center cursor-pointer select-none shrink-0" aria-label="VelvetCall Home">
             <span
               style={{
                 fontFamily: "'Cormorant Garamond', serif",
@@ -52,9 +53,9 @@ export default function Nav() {
           </Link>
 
           {/* Desktop nav links */}
-          <div className="hidden md:flex items-center gap-5">
+          <div className="hidden md:flex items-center gap-5" role="menubar">
             {navLinks.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} className="flex items-center gap-1.5 text-sm cursor-pointer transition-colors duration-200">
+              <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} className="flex items-center gap-1.5 text-sm cursor-pointer transition-colors duration-200" role="menuitem">
                 <span
                   className="flex items-center gap-1.5 text-sm cursor-pointer transition-colors duration-200"
                   style={{
@@ -142,6 +143,7 @@ export default function Nav() {
       {/* Mobile fixed bottom tab bar */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-50"
+        aria-label="Mobile Navigation"
         style={{
           background: "rgba(6,4,14,0.98)",
           backdropFilter: "blur(24px)",
@@ -150,11 +152,11 @@ export default function Nav() {
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        <div className="flex items-center justify-around px-2 py-2">
+        <div className="flex items-center justify-around px-2 py-2" role="menubar">
           {navLinks.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);
             return (
-              <Link key={href} href={href} className="flex flex-col items-center gap-1 cursor-pointer px-3 py-1.5 rounded-xl transition-all duration-200"
+              <Link key={href} href={href} className="flex flex-col items-center gap-1 cursor-pointer px-3 py-1.5 rounded-xl transition-all duration-200" role="menuitem"
                 style={{
                   color: active ? "hsl(0 72% 65%)" : "hsl(30 5% 48%)",
                   background: active ? "rgba(196,30,58,0.1)" : "transparent",
